@@ -25,15 +25,6 @@ function App() {
     }
   }, [])
 
-  useEffect(() => {
-    if (status === 'success') {
-      const timer = setTimeout(() => {
-        navigate('/payment')
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [status, navigate])
-
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!addressInput) return
@@ -119,6 +110,13 @@ function App() {
           <div className="w-full p-4 bg-black/40 rounded-xl border border-white/5 font-mono text-sm text-zinc-300 break-all select-all">
             {addressInput}
           </div>
+          <button
+              type="submit"
+              className="w-full py-4 text-lg font-semibold text-white bg-primary rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              onClick={()=>navigate('/payment')}
+            >
+              Enter SigPad
+            </button>
         </div>
       ) : (
         <>

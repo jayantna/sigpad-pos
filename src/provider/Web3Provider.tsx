@@ -6,8 +6,7 @@ import { WagmiProvider } from 'wagmi'
 import type { PropsWithChildren } from 'react'
 
 // 1. Get projectId
-// 1. Get projectId
-const projectId = 'ea521dfc2ea6cff10aaf89b1096b5445' // Using a different public testing ID
+const projectId = import.meta.env.VITE_PROJECT_ID
 
 // 2. Set up Wagmi Adapter
 export const networks = [mainnet, arbitrum]

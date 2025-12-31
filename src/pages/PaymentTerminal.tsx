@@ -2,8 +2,109 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react'
 import axios from 'axios'
-import type { PaymentState, PaymentQuoteResponse } from '../types/payment'
+import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
+import type { ClientEvmSigner } from "@x402/evm";
+import { ExactEvmScheme, registerExactEvmScheme } from "@x402/evm/exact/client";
+import type { PaymentState } from '../types/payment'
 import PaymentLayout from '../components/PaymentLayout'
+import type { Account, WalletClient } from 'viem';
+import { useWalletClient } from "wagmi";
+import {
+    decodePaymentRequiredHeader,
+    decodePaymentResponseHeader,
+    encodePaymentSignatureHeader,
+} from "@x402/core/http";
+import type { PaymentRequirements } from "@x402/core/types";
+
+
+
+/**
+ * Converts a wagmi/viem WalletClient to a ClientEvmSigner for x402Client
+ */
+function wagmiToClientSigner(walletClient: WalletClient): ClientEvmSigner {
+    if (!walletClient.account) {
+        throw new Error("Wallet client must have an account");
+    }
+
+    return {
+        address: walletClient.account.address,
+        signTypedData: async (message) => {
+            const signature = await walletClient.signTypedData({
+                account: walletClient.account as Account,
+                domain: message.domain,
+                types: message.types,
+                primaryType: message.primaryType,
+                message: message.message,
+            });
+            return signature;
+        },
+    };
+}
+
+/**
+ * Makes a request with x402 payment handling.
+ *
+ * @param client - The x402 client instance to use for payments
+ * @param url - The URL to request
+ */
+async function makeRequestWithPayment(client: x402Client, url: string): Promise<void> {
+    console.log(`\n🌐 Making initial request to: ${url}\n`);
+
+    // Step 1: Make initial request
+    let response = await fetch(url);
+    console.log(`📥 Initial response status: ${response.status}\n`);
+
+    // Step 2: Handle 402 Payment Required
+    if (response.status === 402) {
+        console.log("💳 Payment required! Processing...\n");
+
+        // Decode payment requirements from PAYMENT-REQUIRED header
+        const paymentRequiredHeader = response.headers.get("PAYMENT-REQUIRED");
+        if (!paymentRequiredHeader) {
+            throw new Error("Missing PAYMENT-REQUIRED header");
+        }
+        const paymentRequired = decodePaymentRequiredHeader(paymentRequiredHeader);
+
+        const requirements: PaymentRequirements[] = Array.isArray(paymentRequired.accepts)
+            ? paymentRequired.accepts
+            : [paymentRequired.accepts];
+
+        console.log("📋 Payment requirements:");
+        requirements.forEach((req, i) => {
+            console.log(`   ${i + 1}. ${req.network} / ${req.scheme} - ${req.amount}`);
+        });
+
+        // Step 3: Create and encode payment
+        console.log("\n🔐 Creating payment...\n");
+        const paymentPayload = await client.createPaymentPayload(paymentRequired);
+        const paymentHeader = encodePaymentSignatureHeader(paymentPayload);
+
+        // Step 4: Retry with PAYMENT-SIGNATURE header
+        console.log("🔄 Retrying with payment...\n");
+        response = await fetch(url, {
+            headers: { "PAYMENT-SIGNATURE": paymentHeader },
+        });
+        console.log(`📥 Response status: ${response.status}\n`);
+    }
+
+    // Step 5: Handle success
+    if (response.status === 200) {
+        console.log("✅ Success!\n");
+        console.log("Response:", await response.json());
+
+        // Decode settlement from PAYMENT-RESPONSE header
+        const settlementHeader = response.headers.get("PAYMENT-RESPONSE");
+        if (settlementHeader) {
+            const settlement = decodePaymentResponseHeader(settlementHeader);
+            console.log("\n💰 Settlement:");
+            console.log(`   Transaction: ${settlement.transaction}`);
+            console.log(`   Network: ${settlement.network}`);
+            console.log(`   Payer: ${settlement.payer}`);
+        }
+    } else {
+        throw new Error(`Unexpected status: ${response.status}`);
+    }
+}
 
 export default function PaymentTerminal() {
     const location = useLocation()
@@ -16,6 +117,18 @@ export default function PaymentTerminal() {
     const [orderId, setOrderId] = useState<string>('')
     const [isCreatingOrder, setIsCreatingOrder] = useState(false)
     const [error, setError] = useState('')
+
+    const { data: walletClient } = useWalletClient();
+
+    // Create x402 client and register EVM scheme with wagmi signer (only when wallet is connected)
+    let client: x402Client | null = null;
+
+    if (walletClient) {
+        client = new x402Client();
+        const signer = wagmiToClientSigner(walletClient);
+        registerExactEvmScheme(client, { signer });
+    }
+
 
     // Redirect if no state is provided
     useEffect(() => {
@@ -61,7 +174,36 @@ export default function PaymentTerminal() {
     }
 
     const handlePayment = async (orderId: string) => {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/payment/complete/${orderId}`)
+        try {
+            // Custom selector - pick which payment option to use
+            // This selects the second payment option (Solana)
+            // Create your own logic here to select preferred payment option
+            const selectPayment = (_version: number, requirements: PaymentRequirements[]) => {
+                const selected = requirements[0];
+                console.log(`🎯 Selected: ${selected.network} / ${selected.scheme}`);
+                return selected;
+            };
+
+            const signer = wagmiToClientSigner(walletClient!);
+            const client = new x402Client(selectPayment)
+                .register("eip155:*", new ExactEvmScheme(signer))
+            console.log("✅ Client ready\n");
+            // Use the fetchWithPayment wrapper to handle x402 payment flow
+            await makeRequestWithPayment(client,
+                `${import.meta.env.VITE_API_URL}/api/payment/complete/${orderId}`,
+            );
+
+            // if (!res.ok) {
+            //     throw new Error(`Payment completion failed: ${res.statusText}`);
+            // }
+
+            // const data = await res.json();
+            // console.log('Payment completed:', data);
+            // TODO: Handle successful payment (e.g., navigate to success page)
+        } catch (err: any) {
+            console.error('Payment error:', err);
+            setError(err.message || 'Payment failed');
+        }
     }
 
     return (
@@ -196,7 +338,7 @@ export default function PaymentTerminal() {
                             {orderId && (
                                 <button
                                     className="flex-1 py-3 text-base font-semibold text-white bg-primary rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/30"
-                                    onClick={()=>handlePayment(orderId)}
+                                    onClick={() => handlePayment(orderId)}
                                 >
                                     Continue to Payment
                                 </button>

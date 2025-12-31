@@ -8,7 +8,7 @@ import { ExactEvmScheme, registerExactEvmScheme } from "@x402/evm/exact/client";
 import type { PaymentState } from '../types/payment'
 import PaymentLayout from '../components/PaymentLayout'
 import type { Account, WalletClient } from 'viem';
-import { useWalletClient } from "wagmi";
+import { useWalletClient, useDisconnect } from "wagmi";
 import {
     decodePaymentRequiredHeader,
     decodePaymentResponseHeader,
@@ -46,8 +46,9 @@ function wagmiToClientSigner(walletClient: WalletClient): ClientEvmSigner {
  *
  * @param client - The x402 client instance to use for payments
  * @param url - The URL to request
+ * @returns Payment response data
  */
-async function makeRequestWithPayment(client: x402Client, url: string): Promise<void> {
+async function makeRequestWithPayment(client: x402Client, url: string): Promise<any> {
     console.log(`\n🌐 Making initial request to: ${url}\n`);
 
     // Step 1: Make initial request
@@ -90,7 +91,8 @@ async function makeRequestWithPayment(client: x402Client, url: string): Promise<
     // Step 5: Handle success
     if (response.status === 200) {
         console.log("✅ Success!\n");
-        console.log("Response:", await response.json());
+        const responseData = await response.json();
+        console.log("Response:", responseData);
 
         // Decode settlement from PAYMENT-RESPONSE header
         const settlementHeader = response.headers.get("PAYMENT-RESPONSE");
@@ -101,6 +103,8 @@ async function makeRequestWithPayment(client: x402Client, url: string): Promise<
             console.log(`   Network: ${settlement.network}`);
             console.log(`   Payer: ${settlement.payer}`);
         }
+
+        return responseData;
     } else {
         throw new Error(`Unexpected status: ${response.status}`);
     }
@@ -113,9 +117,11 @@ export default function PaymentTerminal() {
 
     const { address, isConnected } = useAppKitAccount()
     const { open } = useAppKit()
+    const { disconnect } = useDisconnect()
 
     const [orderId, setOrderId] = useState<string>('')
     const [isCreatingOrder, setIsCreatingOrder] = useState(false)
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false)
     const [error, setError] = useState('')
 
     const { data: walletClient } = useWalletClient();
@@ -174,6 +180,9 @@ export default function PaymentTerminal() {
     }
 
     const handlePayment = async (orderId: string) => {
+        setIsProcessingPayment(true)
+        setError('')
+
         try {
             // Custom selector - pick which payment option to use
             // This selects the second payment option (Solana)
@@ -188,21 +197,31 @@ export default function PaymentTerminal() {
             const client = new x402Client(selectPayment)
                 .register("eip155:*", new ExactEvmScheme(signer))
             console.log("✅ Client ready\n");
-            // Use the fetchWithPayment wrapper to handle x402 payment flow
-            await makeRequestWithPayment(client,
+
+            // Use the makeRequestWithPayment to handle x402 payment flow
+            const paymentResponse = await makeRequestWithPayment(client,
                 `${import.meta.env.VITE_API_URL}/api/payment/complete/${orderId}`,
             );
 
-            // if (!res.ok) {
-            //     throw new Error(`Payment completion failed: ${res.statusText}`);
-            // }
+            // Check if payment was successful
+            if (paymentResponse?.success) {
+                console.log('Payment completed successfully:', paymentResponse);
 
-            // const data = await res.json();
-            // console.log('Payment completed:', data);
-            // TODO: Handle successful payment (e.g., navigate to success page)
+                // Disconnect the wallet
+                disconnect();
+
+                // Navigate to success page with payment data
+                navigate('/payment-success', {
+                    state: paymentResponse
+                });
+            } else {
+                throw new Error('Payment was not successful');
+            }
         } catch (err: any) {
             console.error('Payment error:', err);
             setError(err.message || 'Payment failed');
+        } finally {
+            setIsProcessingPayment(false)
         }
     }
 
@@ -337,10 +356,14 @@ export default function PaymentTerminal() {
                             </button>
                             {orderId && (
                                 <button
-                                    className="flex-1 py-3 text-base font-semibold text-white bg-primary rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/30"
+                                    className="flex-1 py-3 text-base font-semibold text-white bg-primary rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2"
                                     onClick={() => handlePayment(orderId)}
+                                    disabled={isProcessingPayment}
                                 >
-                                    Continue to Payment
+                                    {isProcessingPayment && (
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    )}
+                                    {isProcessingPayment ? 'Processing Payment...' : 'Continue to Payment'}
                                 </button>
                             )}
                         </div>

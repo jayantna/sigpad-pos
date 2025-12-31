@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import Payment from './pages/Payment.tsx'
 import PaymentTerminal from './pages/PaymentTerminal.tsx'
+import PaymentSuccess from './pages/PaymentSuccess.tsx'
 import Layout from './Layout.tsx'
 import { Web3Provider } from './provider/Web3Provider.tsx'
 import { VerificationProvider } from './context/VerificationContext.tsx'
@@ -19,6 +20,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/" element={<App />} />
               <Route path="/payment" element={<Payment />} />
               <Route path="/payment-terminal" element={<PaymentTerminal />} />
+              <Route path="/payment-success" element={<PaymentSuccess />} />
             </Route>
           </Routes>
         </BrowserRouter>

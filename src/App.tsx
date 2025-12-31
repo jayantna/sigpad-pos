@@ -83,6 +83,8 @@ function App() {
 
           login(address)
           setStatus('success')
+          // Disconnect wallet immediately after successful verification
+          disconnect()
         } catch (err: any) {
           console.error(err)
           setStatus('error')
@@ -111,12 +113,12 @@ function App() {
             {addressInput}
           </div>
           <button
-              type="submit"
-              className="w-full py-4 text-lg font-semibold text-white bg-primary rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-              onClick={()=>navigate('/payment')}
-            >
-              Enter SigPad
-            </button>
+            type="submit"
+            className="w-full py-4 text-lg font-semibold text-white bg-primary rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            onClick={() => navigate('/payment')}
+          >
+            Enter SigPad
+          </button>
         </div>
       ) : (
         <>

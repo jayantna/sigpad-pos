@@ -83,7 +83,7 @@ function App() {
 
           login(address)
           setStatus('success')
-          // Disconnect wallet immediately after successful verification
+          // Disconnect wallet immediately after successful merchant verification
           disconnect()
         } catch (err: any) {
           console.error(err)

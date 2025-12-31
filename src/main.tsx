@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import Payment from './pages/Payment.tsx'
+import PaymentTerminal from './pages/PaymentTerminal.tsx'
 import Layout from './Layout.tsx'
 import { Web3Provider } from './provider/Web3Provider.tsx'
 import { VerificationProvider } from './context/VerificationContext.tsx'
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
             <Route element={<Layout />}>
               <Route path="/" element={<App />} />
               <Route path="/payment" element={<Payment />} />
+              <Route path="/payment-terminal" element={<PaymentTerminal />} />
             </Route>
           </Routes>
         </BrowserRouter>

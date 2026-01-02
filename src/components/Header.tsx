@@ -1,13 +1,27 @@
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useVerification } from '../context/VerificationContext'
+import { useActiveAccount, useDisconnect, useActiveWallet } from 'thirdweb/react'
 
+/**
+ * Header component with merchant address display and logout functionality.
+ * Uses Thirdweb hooks for merchant state and wallet disconnection.
+ */
 export default function Header() {
-    const { verifiedAddress, logout } = useVerification()
     const navigate = useNavigate()
 
+    // Thirdweb hooks
+    const account = useActiveAccount()
+    const wallet = useActiveWallet()
+    const { disconnect } = useDisconnect()
+
+    // Derived state
+    const verifiedAddress = account?.address
+
     const handleLogout = () => {
-        logout()
+        // Disconnect thirdweb wallet if connected
+        if (wallet) {
+            disconnect(wallet)
+        }
         navigate('/')
     }
 

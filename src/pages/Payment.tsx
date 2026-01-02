@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { useVerification } from '../context/VerificationContext'
 import { useNavigate } from 'react-router-dom'
+import { useActiveAccount } from 'thirdweb/react'
 import type { Strategy } from '../types/strategies'
 
 export default function Payment() {
-    const { verifiedAddress } = useVerification()
+    const account = useActiveAccount()
+    const verifiedAddress = account?.address
     const [strategies, setStrategies] = useState<Strategy[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
@@ -61,6 +62,21 @@ export default function Payment() {
                 }
             })
         }
+    }
+
+    if (!verifiedAddress) {
+        return (
+            <div className="relative z-10 w-full max-w-md p-8 bg-surface/60 backdrop-blur-xl border border-white/5 rounded-3xl shadow-2xl animate-fade-in mx-4 my-8 text-center">
+                <h2 className="text-2xl font-bold text-white mb-4">Merchant Access Required</h2>
+                <p className="text-zinc-400 mb-6">Please connect your wallet to access the payment terminal.</p>
+                <button
+                    onClick={() => navigate('/')}
+                    className="px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/30 transition-all"
+                >
+                    Connect Wallet
+                </button>
+            </div>
+        )
     }
 
     return (
